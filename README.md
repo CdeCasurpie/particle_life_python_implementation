@@ -2,6 +2,9 @@
 
 Este proyecto visualiza una simulación de partículas interactuando entre sí mediante reglas personalizadas. La simulación fue escrita originalmente en Python con Pygame y luego transcrita a HTML + JavaScript para poder visualizarla desde cualquier navegador.
 
+![ezgif-16de132ab97e9d](https://github.com/user-attachments/assets/e33c7d5c-b2a3-4d22-aa54-966730f0c377)
+
+
 ## Archivos
 
 - `simulacion.py`: Código original en Python usando Pygame.
