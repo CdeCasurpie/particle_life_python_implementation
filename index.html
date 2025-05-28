@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Particle Life - Optimized</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: black;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+    }
+    #info-panel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-size: 14px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+      max-width: 300px;
+    }
+    #info-panel.hidden {
+      display: none;
+    }
+    .info-section {
+      margin-bottom: 10px;
+    }
+    .info-section h3 {
+      margin: 0 0 5px 0;
+      color: #fff;
+      font-size: 16px;
+    }
+    .info-item {
+      margin: 2px 0;
+      font-size: 12px;
+    }
+    .controls {
+      color: #ccc;
+      font-size: 10px;
+    }
+    #toggle-help {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      color: white;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 5px 10px;
+      border-radius: 3px;
+      font-size: 12px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="toggle-help">Press H to toggle menu</div>
+  
+  <div id="info-panel">
+    <div class="info-section">
+      <h3>Status</h3>
+      <div id="fps" class="info-item">FPS: 0</div>
+      <div id="atoms-count" class="info-item">Atoms: 0</div>
+      <div id="colors-count" class="info-item">Colors: 4</div>
+      <div id="time-scale" class="info-item">Time Scale: 0.5</div>
+      <div id="zoom-level" class="info-item">Zoom: 1.00x</div>
+      <div id="explore-mode" class="info-item">Explore: OFF</div>
+    </div>
+    
+    <div class="info-section">
+      <h3>Controls</h3>
+      <div class="controls">
+        <div>R: New Rules | O: Reset | S: Symmetric</div>
+        <div>E: Explore | U/D: Colors | +/-: Speed</div>
+        <div>Arrows: Move | Z/X: Zoom | C: Center</div>
+        <div>H: Menu | ESC: Regenerate</div>
+      </div>
+    </div>
+  </div>
+  
+  <canvas id="canvas"></canvas>
+  
+  <script>
+    // Canvas setup with high performance
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d", { 
+      alpha: false, 
+      desynchronized: true,
+      willReadFrequently: false 
+    });
+    
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+
+    // Optimized configuration - reduced particles for better performance
+    const COLORS = ['#00ff00', '#ff0000', '#ffa500', '#00ffff', '#ff00ff', '#e6e6fa', '#008080'];
+    const COLOR_NAMES = ['green', 'red', 'orange', 'cyan', 'magenta', 'lavender', 'teal'];
+    
+    let settings = {
+      fps: 0,
+      atoms: {
+        count: 400, // Reduced for better performance
+        radius: 1.5
+      },
+      num_colors: 4,
+      time_scale: 1,
+      viscosity: 0.8,
+      explore: false,
+      explore_period: 120,
+      interaction_radius: 60 // Reduced interaction radius
+    };
+
+    // Camera system
+    let camera = {
+      x: width / 2,
+      y: height / 2,
+      zoom: 1.0,
+      speed: 8
+    };
+
+    // Optimized data structures
+    let atoms = [];
+    let atomsData = null; // Float32Array for better performance
+    let colors = [];
+    let rules = new Float32Array(49); // Pre-allocated for max 7 colors
+    let radii2 = new Float32Array(7);
+    let forces = null; // Float32Array for forces
+    let explorationTimer = 0;
+    let menuVisible = true;
+
+    // Performance tracking
+    let keys = {};
+    let frameCount = 0;
+    let lastFpsUpdate = performance.now();
+    let lastTime = performance.now();
+
+    // Spatial optimization - simple grid for culling
+    const GRID_SIZE = 80;
+    let gridCols, gridRows;
+    let spatialGrid = [];
+
+    function initGrid() {
+      gridCols = Math.ceil(width / GRID_SIZE);
+      gridRows = Math.ceil(height / GRID_SIZE);
+      spatialGrid = new Array(gridCols * gridRows);
+      for (let i = 0; i < spatialGrid.length; i++) {
+        spatialGrid[i] = [];
+      }
+    }
+
+    function clearGrid() {
+      for (let i = 0; i < spatialGrid.length; i++) {
+        spatialGrid[i].length = 0;
+      }
+    }
+
+    function getGridIndex(x, y) {
+      const col = Math.floor(x / GRID_SIZE);
+      const row = Math.floor(y / GRID_SIZE);
+      return Math.max(0, Math.min(gridCols * gridRows - 1, row * gridCols + col));
+    }
+
+    function updateGrid() {
+      clearGrid();
+      const atomCount = atoms.length;
+      for (let i = 0; i < atomCount; i++) {
+        const atom = atoms[i];
+        const gridIndex = getGridIndex(atom.x, atom.y);
+        spatialGrid[gridIndex].push(i);
+      }
+    }
+
+    // Optimized random number generator
+    let seed = Math.floor(Math.random() * 2147483647);
+    function fastRandom() {
+      seed = (seed * 1664525 + 1013904223) & 0xffffffff;
+      return (seed >>> 0) / 4294967296;
+    }
+
+    function setNumberOfColors() {
+      colors = [];
+      for (let i = 0; i < Math.min(settings.num_colors, COLOR_NAMES.length); i++) {
+        colors.push(i);
+      }
+    }
+
+    function randomRules() {
+      if (!settings.explore) {
+        seed = Math.floor(performance.now()) & 0x7fffffff;
+      }
+      
+      // Generate rules matrix
+      for (let i = 0; i < settings.num_colors; i++) {
+        for (let j = 0; j < settings.num_colors; j++) {
+          rules[i * 7 + j] = fastRandom() * 2 - 1;
+        }
+        radii2[i] = settings.interaction_radius * settings.interaction_radius;
+      }
+    }
+
+    function symmetricRules() {
+      for (let i = 0; i < settings.num_colors; i++) {
+        for (let j = 0; j < settings.num_colors; j++) {
+          if (j < i) {
+            const v = 0.5 * (rules[i * 7 + j] + rules[j * 7 + i]);
+            rules[i * 7 + j] = rules[j * 7 + i] = v;
+          }
+        }
+      }
+    }
+
+    function createAtoms(numberOfAtomsPerColor) {
+      atoms = [];
+      const totalAtoms = numberOfAtomsPerColor * settings.num_colors;
+      
+      // Pre-allocate typed arrays for better performance
+      atomsData = new Float32Array(totalAtoms * 4); // x, y, vx, vy
+      forces = new Float32Array(totalAtoms * 2); // fx, fy
+      
+      for (let c = 0; c < settings.num_colors; c++) {
+        for (let i = 0; i < numberOfAtomsPerColor; i++) {
+          atoms.push({
+            x: 50 + fastRandom() * (width - 100),
+            y: 50 + fastRandom() * (height - 100),
+            vx: 0,
+            vy: 0,
+            color: c
+          });
+        }
+      }
+    }
+
+    function startRandom() {
+      randomRules();
+      createAtoms(settings.atoms.count);
+      initGrid();
+    }
+
+    // Highly optimized force calculation with spatial optimization
+    function computeForces() {
+      const atomCount = atoms.length;
+      forces.fill(0);
+      
+      updateGrid(); // Update spatial grid
+      
+      // Process each atom
+      for (let i = 0; i < atomCount; i++) {
+        const a = atoms[i];
+        const aColor = a.color;
+        const aX = a.x;
+        const aY = a.y;
+        const r2 = radii2[aColor];
+        
+        let fx = 0, fy = 0;
+        
+        // Check neighboring grid cells only
+        const gridIndex = getGridIndex(aX, aY);
+        const gridCol = gridIndex % gridCols;
+        const gridRow = Math.floor(gridIndex / gridCols);
+        
+        // Check 3x3 neighborhood
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const neighborCol = gridCol + dx;
+            const neighborRow = gridRow + dy;
+            
+            if (neighborCol >= 0 && neighborCol < gridCols && 
+                neighborRow >= 0 && neighborRow < gridRows) {
+              
+              const neighborIndex = neighborRow * gridCols + neighborCol;
+              const neighbors = spatialGrid[neighborIndex];
+              
+              for (let k = 0; k < neighbors.length; k++) {
+                const j = neighbors[k];
+                if (i === j) continue;
+                
+                const b = atoms[j];
+                const g = rules[aColor * 7 + b.color];
+                
+                // Simple distance check (no toroidal for performance)
+                const dx = aX - b.x;
+                const dy = aY - b.y;
+                const d2 = dx * dx + dy * dy;
+                
+                if (d2 < r2 && d2 > 0.01) {
+                  const d = Math.sqrt(d2);
+                  const F = g / d;
+                  fx += F * dx;
+                  fy += F * dy;
+                }
+              }
+            }
+          }
+        }
+        
+        forces[i * 2] = fx;
+        forces[i * 2 + 1] = fy;
+      }
+      
+      // Update velocities and positions
+      for (let i = 0; i < atomCount; i++) {
+        const atom = atoms[i];
+        const fx = forces[i * 2];
+        const fy = forces[i * 2 + 1];
+        
+        // Update velocity with viscosity
+        const vmix = 1.0 - settings.viscosity;
+        atom.vx = atom.vx * vmix + fx * settings.time_scale * settings.viscosity;
+        atom.vy = atom.vy * vmix + fy * settings.time_scale * settings.viscosity;
+        
+        // Update positions
+        atom.x += atom.vx;
+        atom.y += atom.vy;
+        
+        // Simple boundary wrapping
+        if (atom.x < 0) atom.x += width;
+        else if (atom.x >= width) atom.x -= width;
+        
+        if (atom.y < 0) atom.y += height;
+        else if (atom.y >= height) atom.y -= height;
+      }
+    }
+
+    function exploreParameters() {
+      if (explorationTimer <= 0) {
+        const c1 = Math.floor(fastRandom() * settings.num_colors);
+        
+        if (fastRandom() >= 0.2) {
+          const c2 = Math.floor(fastRandom() * settings.num_colors);
+          const newStrength = fastRandom() * 2 - 1;
+          rules[c1 * 7 + c2] = newStrength;
+        } else {
+          radii2[c1] = (20 + fastRandom() * 100) ** 2;
+        }
+        
+        explorationTimer = settings.explore_period;
+      }
+      explorationTimer--;
+    }
+
+    function worldToScreen(x, y) {
+      return [
+        (x - camera.x) * camera.zoom + width * 0.5,
+        (y - camera.y) * camera.zoom + height * 0.5
+      ];
+    }
+
+    function updateParams() {
+      frameCount++;
+      const curTime = performance.now();
+      if (curTime - lastFpsUpdate >= 1000) {
+        settings.fps = Math.round(frameCount * 1000 / (curTime - lastFpsUpdate));
+        frameCount = 0;
+        lastFpsUpdate = curTime;
+      }
+      
+      if (settings.explore) {
+        exploreParameters();
+      }
+      
+      // Handle camera controls
+      if (keys['KeyZ'] && camera.zoom < 3.0) camera.zoom += 0.05;
+      if (keys['KeyX'] && camera.zoom > 0.3) camera.zoom -= 0.05;
+      
+      const speed = camera.speed / camera.zoom;
+      if (keys['ArrowLeft']) camera.x -= speed;
+      if (keys['ArrowRight']) camera.x += speed;
+      if (keys['ArrowUp']) camera.y -= speed;
+      if (keys['ArrowDown']) camera.y += speed;
+    }
+
+    // Optimized rendering with batching
+    function draw() {
+      // Clear with solid color
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, width, height);
+      
+      const atomCount = atoms.length;
+      const radius = settings.atoms.radius * camera.zoom;
+      
+      if (radius < 1) {
+        // If zoomed out, draw as points for performance
+        for (let i = 0; i < atomCount; i++) {
+          const atom = atoms[i];
+          const [x, y] = worldToScreen(atom.x, atom.y);
+          
+          if (x >= -10 && x <= width + 10 && y >= -10 && y <= height + 10) {
+            ctx.fillStyle = COLORS[atom.color];
+            ctx.fillRect(x, y, 1, 1);
+          }
+        }
+      } else {
+        // Draw as circles when zoomed in
+        ctx.beginPath();
+        for (let color = 0; color < settings.num_colors; color++) {
+          ctx.fillStyle = COLORS[color];
+          ctx.beginPath();
+          
+          for (let i = 0; i < atomCount; i++) {
+            const atom = atoms[i];
+            if (atom.color !== color) continue;
+            
+            const [x, y] = worldToScreen(atom.x, atom.y);
+            
+            if (x >= -radius && x <= width + radius && y >= -radius && y <= height + radius) {
+              ctx.moveTo(x + radius, y);
+              ctx.arc(x, y, radius, 0, 6.283185307179586);
+            }
+          }
+          
+          ctx.fill();
+        }
+      }
+    }
+
+    function updateInfo() {
+      if (menuVisible) {
+        document.getElementById('fps').textContent = `FPS: ${settings.fps}`;
+        document.getElementById('atoms-count').textContent = `Atoms: ${atoms.length}`;
+        document.getElementById('colors-count').textContent = `Colors: ${settings.num_colors}`;
+        document.getElementById('time-scale').textContent = `Time Scale: ${settings.time_scale.toFixed(2)}`;
+        document.getElementById('zoom-level').textContent = `Zoom: ${camera.zoom.toFixed(2)}x`;
+        document.getElementById('explore-mode').textContent = `Explore: ${settings.explore ? 'ON' : 'OFF'}`;
+      }
+    }
+
+    // Main animation loop with optimizations
+    function animate() {
+      const startTime = performance.now();
+      
+      computeForces();
+      draw();
+      updateParams();
+      updateInfo();
+      
+      // Adaptive quality - reduce particles if FPS is too low
+      if (settings.fps < 30 && atoms.length > 200) {
+        if (frameCount % 120 === 0) { // Check every 2 seconds
+          atoms = atoms.slice(0, Math.floor(atoms.length * 0.9));
+          console.log(`Reduced particles to ${atoms.length} for better performance`);
+        }
+      }
+      
+      requestAnimationFrame(animate);
+    }
+
+    // Event handlers
+    window.addEventListener('keydown', (e) => {
+      keys[e.code] = true;
+      
+      switch(e.code) {
+        case 'Escape':
+          startRandom();
+          break;
+        case 'KeyH':
+          menuVisible = !menuVisible;
+          document.getElementById('info-panel').classList.toggle('hidden', !menuVisible);
+          break;
+        case 'KeyR':
+          randomRules();
+          createAtoms(settings.atoms.count);
+          break;
+        case 'KeyO':
+          createAtoms(settings.atoms.count);
+          break;
+        case 'KeyS':
+          symmetricRules();
+          createAtoms(settings.atoms.count);
+          break;
+        case 'KeyE':
+          settings.explore = !settings.explore;
+          break;
+        case 'KeyU':
+          settings.num_colors = Math.min(7, settings.num_colors + 1);
+          setNumberOfColors();
+          startRandom();
+          break;
+        case 'KeyD':
+          settings.num_colors = Math.max(1, settings.num_colors - 1);
+          setNumberOfColors();
+          startRandom();
+          break;
+        case 'Equal':
+        case 'NumpadAdd':
+          settings.time_scale = Math.min(2.0, settings.time_scale * 1.1);
+          break;
+        case 'Minus':
+        case 'NumpadSubtract':
+          settings.time_scale = Math.max(0.1, settings.time_scale / 2);
+          break;
+        case 'KeyC':
+          camera.x = width / 2;
+          camera.y = height / 2;
+          camera.zoom = 1.0;
+          break;
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.code] = false;
+    });
+
+    window.addEventListener('resize', () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+      initGrid();
+    });
+
+    // Initialize and start
+    console.log('Initializing optimized Particle Life...');
+    setNumberOfColors();
+    startRandom();
+    animate();
+  </script>
+</body>
+</html>
