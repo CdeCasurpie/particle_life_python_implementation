@@ -77,8 +77,8 @@
       <div class="controls">
         <div>R: New Rules | O: Reset | S: Symmetric</div>
         <div>E: Explore | U/D: Colors | +/-: Speed</div>
-        <div>Arrows: Move | Z/X: Zoom | C: Center</div>
-        <div>H: Menu | ESC: Regenerate</div>
+        <div>Q/A: Particles | Arrows: Move | Z/X: Zoom</div>
+        <div>C: Center | H: Menu | ESC: Regenerate</div>
       </div>
     </div>
   </div>
@@ -106,11 +106,11 @@
     let settings = {
       fps: 0,
       atoms: {
-        count: 400, // Reduced for better performance
+        count: 1000, // Reduced for better performance
         radius: 1.5
       },
       num_colors: 4,
-      time_scale: 1,
+      time_scale: 0.8,
       viscosity: 0.8,
       explore: false,
       explore_period: 120,
@@ -493,7 +493,17 @@
           break;
         case 'Minus':
         case 'NumpadSubtract':
-          settings.time_scale = Math.max(0.1, settings.time_scale / 2);
+          settings.time_scale = Math.max(0.1, settings.time_scale / 1.1);
+          break;
+        case 'KeyQ':
+          settings.atoms.count = Math.min(2000, settings.atoms.count + 100);
+          createAtoms(settings.atoms.count);
+          console.log(`Increased particles to ${settings.atoms.count * settings.num_colors} total`);
+          break;
+        case 'KeyA':
+          settings.atoms.count = Math.max(50, settings.atoms.count - 100);
+          createAtoms(settings.atoms.count);
+          console.log(`Decreased particles to ${settings.atoms.count * settings.num_colors} total`);
           break;
         case 'KeyC':
           camera.x = width / 2;
