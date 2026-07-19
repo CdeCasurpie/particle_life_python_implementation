@@ -3,533 +3,699 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Particle Life - Optimized</title>
+  <title>Particle Life Simulation</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+    
+    :root {
+      --bg: #050505;
+      --panel-bg: rgba(15, 15, 20, 0.65);
+      --panel-border: rgba(255, 255, 255, 0.1);
+      --text: #eaeaea;
+      --accent: #00ffcc;
+    }
+
     body {
       margin: 0;
       overflow: hidden;
-      background-color: black;
-      font-family: Arial, sans-serif;
+      background-color: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
     }
+
     canvas {
       display: block;
+      width: 100vw;
+      height: 100vh;
     }
-    #info-panel {
+
+    #ui-container {
       position: absolute;
-      top: 10px;
-      left: 10px;
-      color: white;
-      font-size: 14px;
+      top: 20px;
+      left: 20px;
+      width: 320px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
       z-index: 10;
-      background: rgba(0, 0, 0, 0.7);
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    #ui-container.hidden {
+      transform: translateX(-120%);
+      opacity: 0;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 600;
+      background: linear-gradient(90deg, #00ffcc, #ff00ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .control-group {
+      margin-bottom: 15px;
+    }
+
+    .control-group label {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 6px;
+      color: #aaa;
+    }
+
+    .value-display {
+      float: right;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      background: rgba(255, 255, 255, 0.1);
+      height: 4px;
+      border-radius: 2px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .btn-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    button {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--panel-border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: var(--accent);
+    }
+    
+    button.primary {
+      background: rgba(0, 255, 204, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    select {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--panel-border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      outline: none;
+    }
+
+    #toggle-ui {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      padding: 8px 16px;
+      border-radius: 20px;
+      cursor: pointer;
+      z-index: 10;
+      font-size: 0.85rem;
+      transition: 0.2s;
+    }
+    
+    #toggle-ui:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--accent);
+    }
+
+    .matrix-display {
+      display: grid;
+      gap: 2px;
+      margin-top: 10px;
+      background: rgba(0,0,0,0.3);
       padding: 10px;
-      border-radius: 5px;
-      max-width: 300px;
+      border-radius: 8px;
     }
-    #info-panel.hidden {
-      display: none;
+    
+    .matrix-row {
+      display: flex;
+      gap: 2px;
     }
-    .info-section {
-      margin-bottom: 10px;
+    
+    .matrix-cell {
+      flex: 1;
+      aspect-ratio: 1;
+      border-radius: 2px;
     }
-    .info-section h3 {
-      margin: 0 0 5px 0;
-      color: #fff;
-      font-size: 16px;
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
     }
-    .info-item {
-      margin: 2px 0;
-      font-size: 12px;
+    ::-webkit-scrollbar-track {
+      background: transparent;
     }
-    .controls {
-      color: #ccc;
-      font-size: 10px;
-    }
-    #toggle-help {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      color: white;
-      background: rgba(0, 0, 0, 0.7);
-      padding: 5px 10px;
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.2);
       border-radius: 3px;
-      font-size: 12px;
-      z-index: 10;
     }
   </style>
 </head>
 <body>
-  <div id="toggle-help">Press H to toggle menu</div>
-  
-  <div id="info-panel">
-    <div class="info-section">
-      <h3>Status</h3>
-      <div id="fps" class="info-item">FPS: 0</div>
-      <div id="atoms-count" class="info-item">Atoms: 0</div>
-      <div id="colors-count" class="info-item">Colors: 4</div>
-      <div id="time-scale" class="info-item">Time Scale: 0.5</div>
-      <div id="zoom-level" class="info-item">Zoom: 1.00x</div>
-      <div id="explore-mode" class="info-item">Explore: OFF</div>
+
+  <div id="toggle-ui">Hide UI (Tab)</div>
+
+  <div id="ui-container">
+    <div class="header">
+      <h1>Particle Life</h1>
+      <span id="fpsDisplay">60 FPS</span>
+    </div>
+
+    <div class="control-group">
+      <label>Preset Engine</label>
+      <select id="presetSelect">
+        <option value="cells">Cells (Organisms)</option>
+        <option value="worms">Worms</option>
+        <option value="snakes">Snakes</option>
+        <option value="chaos">Chaos</option>
+        <option value="random" selected>Random Discovery</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label>Particle Count <span id="countVal" class="value-display">4000</span></label>
+      <input type="range" id="countSlider" min="500" max="8000" step="500" value="4000">
+    </div>
+
+    <div class="control-group">
+      <label>Max Interaction Radius (rMax) <span id="rmaxVal" class="value-display">95</span></label>
+      <input type="range" id="rmaxSlider" min="20" max="250" step="5" value="95">
+    </div>
+
+    <div class="control-group">
+      <label>Friction / Viscosity <span id="frictionVal" class="value-display">0.78</span></label>
+      <input type="range" id="frictionSlider" min="0.1" max="0.99" step="0.01" value="0.78">
     </div>
     
-    <div class="info-section">
-      <h3>Controls</h3>
-      <div class="controls">
-        <div>R: New Rules | O: Reset | S: Symmetric</div>
-        <div>E: Explore | U/D: Colors | +/-: Speed</div>
-        <div>Q/A: Particles | Arrows: Move | Z/X: Zoom</div>
-        <div>C: Center | H: Menu | ESC: Regenerate</div>
-      </div>
+    <div class="control-group">
+      <label>Force Multiplier <span id="forceVal" class="value-display">0.5</span></label>
+      <input type="range" id="forceSlider" min="0.1" max="5.0" step="0.1" value="0.5">
+    </div>
+    
+    <div class="control-group">
+      <label>Trails (Motion Blur) <span id="trailVal" class="value-display">0.3</span></label>
+      <input type="range" id="trailSlider" min="0" max="1" step="0.05" value="0.3">
+    </div>
+
+    <div class="btn-grid">
+      <button id="btnRandomize" class="primary">Randomize Rules</button>
+      <button id="btnRestart">Scatter Particles</button>
+    </div>
+
+    <div style="margin-top: 15px; color: #888; font-size: 0.75rem; line-height: 1.4;">
+      <b>Controls:</b><br/>
+      Arrows: Move Camera<br/>
+      Z / X: Zoom In / Out<br/>
+      C: Reset Camera<br/>
+      Tab: Toggle UI
+    </div>
+
+    <div style="margin-top: 20px;">
+      <label style="font-size: 0.85rem; color: #aaa;">Interaction Matrix (Attract / Repel)</label>
+      <div id="matrixDisplay" class="matrix-display"></div>
     </div>
   </div>
-  
+
   <canvas id="canvas"></canvas>
-  
+
   <script>
-    // Canvas setup with high performance
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d", { 
-      alpha: false, 
-      desynchronized: true,
-      willReadFrequently: false 
-    });
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
     
-    let width = window.innerWidth;
-    let height = window.innerHeight;
-    canvas.width = width;
-    canvas.height = height;
-
-    // Optimized configuration - reduced particles for better performance
-    const COLORS = ['#00ff00', '#ff0000', '#ffa500', '#00ffff', '#ff00ff', '#e6e6fa', '#008080'];
-    const COLOR_NAMES = ['green', 'red', 'orange', 'cyan', 'magenta', 'lavender', 'teal'];
-    
-    let settings = {
-      fps: 0,
-      atoms: {
-        count: 1000, // Reduced for better performance
-        radius: 1.5
-      },
-      num_colors: 4,
-      time_scale: 0.8,
-      viscosity: 0.8,
-      explore: false,
-      explore_period: 120,
-      interaction_radius: 60 // Reduced interaction radius
-    };
-
-    // Camera system
-    let camera = {
-      x: width / 2,
-      y: height / 2,
-      zoom: 1.0,
-      speed: 8
-    };
-
-    // Optimized data structures
-    let atoms = [];
-    let atomsData = null; // Float32Array for better performance
-    let colors = [];
-    let rules = new Float32Array(49); // Pre-allocated for max 7 colors
-    let radii2 = new Float32Array(7);
-    let forces = null; // Float32Array for forces
-    let explorationTimer = 0;
-    let menuVisible = true;
-
-    // Performance tracking
-    let keys = {};
-    let frameCount = 0;
-    let lastFpsUpdate = performance.now();
-    let lastTime = performance.now();
-
-    // Spatial optimization - simple grid for culling
-    const GRID_SIZE = 80;
-    let gridCols, gridRows;
-    let spatialGrid = [];
-
-    function initGrid() {
-      gridCols = Math.ceil(width / GRID_SIZE);
-      gridRows = Math.ceil(height / GRID_SIZE);
-      spatialGrid = new Array(gridCols * gridRows);
-      for (let i = 0; i < spatialGrid.length; i++) {
-        spatialGrid[i] = [];
-      }
-    }
-
-    function clearGrid() {
-      for (let i = 0; i < spatialGrid.length; i++) {
-        spatialGrid[i].length = 0;
-      }
-    }
-
-    function getGridIndex(x, y) {
-      const col = Math.floor(x / GRID_SIZE);
-      const row = Math.floor(y / GRID_SIZE);
-      return Math.max(0, Math.min(gridCols * gridRows - 1, row * gridCols + col));
-    }
-
-    function updateGrid() {
-      clearGrid();
-      const atomCount = atoms.length;
-      for (let i = 0; i < atomCount; i++) {
-        const atom = atoms[i];
-        const gridIndex = getGridIndex(atom.x, atom.y);
-        spatialGrid[gridIndex].push(i);
-      }
-    }
-
-    // Optimized random number generator
-    let seed = Math.floor(Math.random() * 2147483647);
-    function fastRandom() {
-      seed = (seed * 1664525 + 1013904223) & 0xffffffff;
-      return (seed >>> 0) / 4294967296;
-    }
-
-    function setNumberOfColors() {
-      colors = [];
-      for (let i = 0; i < Math.min(settings.num_colors, COLOR_NAMES.length); i++) {
-        colors.push(i);
-      }
-    }
-
-    function randomRules() {
-      if (!settings.explore) {
-        seed = Math.floor(performance.now()) & 0x7fffffff;
-      }
-      
-      // Generate rules matrix
-      for (let i = 0; i < settings.num_colors; i++) {
-        for (let j = 0; j < settings.num_colors; j++) {
-          rules[i * 7 + j] = fastRandom() * 2 - 1;
-        }
-        radii2[i] = settings.interaction_radius * settings.interaction_radius;
-      }
-    }
-
-    function symmetricRules() {
-      for (let i = 0; i < settings.num_colors; i++) {
-        for (let j = 0; j < settings.num_colors; j++) {
-          if (j < i) {
-            const v = 0.5 * (rules[i * 7 + j] + rules[j * 7 + i]);
-            rules[i * 7 + j] = rules[j * 7 + i] = v;
-          }
-        }
-      }
-    }
-
-    function createAtoms(numberOfAtomsPerColor) {
-      atoms = [];
-      const totalAtoms = numberOfAtomsPerColor * settings.num_colors;
-      
-      // Pre-allocate typed arrays for better performance
-      atomsData = new Float32Array(totalAtoms * 4); // x, y, vx, vy
-      forces = new Float32Array(totalAtoms * 2); // fx, fy
-      
-      for (let c = 0; c < settings.num_colors; c++) {
-        for (let i = 0; i < numberOfAtomsPerColor; i++) {
-          atoms.push({
-            x: 50 + fastRandom() * (width - 100),
-            y: 50 + fastRandom() * (height - 100),
-            vx: 0,
-            vy: 0,
-            color: c
-          });
-        }
-      }
-    }
-
-    function startRandom() {
-      randomRules();
-      createAtoms(settings.atoms.count);
-      initGrid();
-    }
-
-    // Highly optimized force calculation with spatial optimization
-    function computeForces() {
-      const atomCount = atoms.length;
-      forces.fill(0);
-      
-      updateGrid(); // Update spatial grid
-      
-      // Process each atom
-      for (let i = 0; i < atomCount; i++) {
-        const a = atoms[i];
-        const aColor = a.color;
-        const aX = a.x;
-        const aY = a.y;
-        const r2 = radii2[aColor];
-        
-        let fx = 0, fy = 0;
-        
-        // Check neighboring grid cells only
-        const gridIndex = getGridIndex(aX, aY);
-        const gridCol = gridIndex % gridCols;
-        const gridRow = Math.floor(gridIndex / gridCols);
-        
-        // Check 3x3 neighborhood
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const neighborCol = gridCol + dx;
-            const neighborRow = gridRow + dy;
-            
-            if (neighborCol >= 0 && neighborCol < gridCols && 
-                neighborRow >= 0 && neighborRow < gridRows) {
-              
-              const neighborIndex = neighborRow * gridCols + neighborCol;
-              const neighbors = spatialGrid[neighborIndex];
-              
-              for (let k = 0; k < neighbors.length; k++) {
-                const j = neighbors[k];
-                if (i === j) continue;
-                
-                const b = atoms[j];
-                const g = rules[aColor * 7 + b.color];
-                
-                // Simple distance check (no toroidal for performance)
-                const dx = aX - b.x;
-                const dy = aY - b.y;
-                const d2 = dx * dx + dy * dy;
-                
-                if (d2 < r2 && d2 > 0.01) {
-                  const d = Math.sqrt(d2);
-                  const F = g / d;
-                  fx += F * dx;
-                  fy += F * dy;
-                }
-              }
-            }
-          }
-        }
-        
-        forces[i * 2] = fx;
-        forces[i * 2 + 1] = fy;
-      }
-      
-      // Update velocities and positions
-      for (let i = 0; i < atomCount; i++) {
-        const atom = atoms[i];
-        const fx = forces[i * 2];
-        const fy = forces[i * 2 + 1];
-        
-        // Update velocity with viscosity
-        const vmix = 1.0 - settings.viscosity;
-        atom.vx = atom.vx * vmix + fx * settings.time_scale * settings.viscosity;
-        atom.vy = atom.vy * vmix + fy * settings.time_scale * settings.viscosity;
-        
-        // Update positions
-        atom.x += atom.vx;
-        atom.y += atom.vy;
-        
-        // Simple boundary wrapping
-        if (atom.x < 0) atom.x += width;
-        else if (atom.x >= width) atom.x -= width;
-        
-        if (atom.y < 0) atom.y += height;
-        else if (atom.y >= height) atom.y -= height;
-      }
-    }
-
-    function exploreParameters() {
-      if (explorationTimer <= 0) {
-        const c1 = Math.floor(fastRandom() * settings.num_colors);
-        
-        if (fastRandom() >= 0.2) {
-          const c2 = Math.floor(fastRandom() * settings.num_colors);
-          const newStrength = fastRandom() * 2 - 1;
-          rules[c1 * 7 + c2] = newStrength;
-        } else {
-          radii2[c1] = (20 + fastRandom() * 100) ** 2;
-        }
-        
-        explorationTimer = settings.explore_period;
-      }
-      explorationTimer--;
-    }
-
-    function worldToScreen(x, y) {
-      return [
-        (x - camera.x) * camera.zoom + width * 0.5,
-        (y - camera.y) * camera.zoom + height * 0.5
-      ];
-    }
-
-    function updateParams() {
-      frameCount++;
-      const curTime = performance.now();
-      if (curTime - lastFpsUpdate >= 1000) {
-        settings.fps = Math.round(frameCount * 1000 / (curTime - lastFpsUpdate));
-        frameCount = 0;
-        lastFpsUpdate = curTime;
-      }
-      
-      if (settings.explore) {
-        exploreParameters();
-      }
-      
-      // Handle camera controls
-      if (keys['KeyZ'] && camera.zoom < 3.0) camera.zoom += 0.05;
-      if (keys['KeyX'] && camera.zoom > 0.3) camera.zoom -= 0.05;
-      
-      const speed = camera.speed / camera.zoom;
-      if (keys['ArrowLeft']) camera.x -= speed;
-      if (keys['ArrowRight']) camera.x += speed;
-      if (keys['ArrowUp']) camera.y -= speed;
-      if (keys['ArrowDown']) camera.y += speed;
-    }
-
-    // Optimized rendering with batching
-    function draw() {
-      // Clear with solid color
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, width, height);
-      
-      const atomCount = atoms.length;
-      const radius = settings.atoms.radius * camera.zoom;
-      
-      if (radius < 1) {
-        // If zoomed out, draw as points for performance
-        for (let i = 0; i < atomCount; i++) {
-          const atom = atoms[i];
-          const [x, y] = worldToScreen(atom.x, atom.y);
-          
-          if (x >= -10 && x <= width + 10 && y >= -10 && y <= height + 10) {
-            ctx.fillStyle = COLORS[atom.color];
-            ctx.fillRect(x, y, 1, 1);
-          }
-        }
-      } else {
-        // Draw as circles when zoomed in
-        ctx.beginPath();
-        for (let color = 0; color < settings.num_colors; color++) {
-          ctx.fillStyle = COLORS[color];
-          ctx.beginPath();
-          
-          for (let i = 0; i < atomCount; i++) {
-            const atom = atoms[i];
-            if (atom.color !== color) continue;
-            
-            const [x, y] = worldToScreen(atom.x, atom.y);
-            
-            if (x >= -radius && x <= width + radius && y >= -radius && y <= height + radius) {
-              ctx.moveTo(x + radius, y);
-              ctx.arc(x, y, radius, 0, 6.283185307179586);
-            }
-          }
-          
-          ctx.fill();
-        }
-      }
-    }
-
-    function updateInfo() {
-      if (menuVisible) {
-        document.getElementById('fps').textContent = `FPS: ${settings.fps}`;
-        document.getElementById('atoms-count').textContent = `Atoms: ${atoms.length}`;
-        document.getElementById('colors-count').textContent = `Colors: ${settings.num_colors}`;
-        document.getElementById('time-scale').textContent = `Time Scale: ${settings.time_scale.toFixed(2)}`;
-        document.getElementById('zoom-level').textContent = `Zoom: ${camera.zoom.toFixed(2)}x`;
-        document.getElementById('explore-mode').textContent = `Explore: ${settings.explore ? 'ON' : 'OFF'}`;
-      }
-    }
-
-    // Main animation loop with optimizations
-    function animate() {
-      const startTime = performance.now();
-      
-      computeForces();
-      draw();
-      updateParams();
-      updateInfo();
-      
-      // Adaptive quality - reduce particles if FPS is too low
-      if (settings.fps < 30 && atoms.length > 200) {
-        if (frameCount % 120 === 0) { // Check every 2 seconds
-          atoms = atoms.slice(0, Math.floor(atoms.length * 0.9));
-          console.log(`Reduced particles to ${atoms.length} for better performance`);
-        }
-      }
-      
-      requestAnimationFrame(animate);
-    }
-
-    // Event handlers
-    window.addEventListener('keydown', (e) => {
-      keys[e.code] = true;
-      
-      switch(e.code) {
-        case 'Escape':
-          startRandom();
-          break;
-        case 'KeyH':
-          menuVisible = !menuVisible;
-          document.getElementById('info-panel').classList.toggle('hidden', !menuVisible);
-          break;
-        case 'KeyR':
-          randomRules();
-          createAtoms(settings.atoms.count);
-          break;
-        case 'KeyO':
-          createAtoms(settings.atoms.count);
-          break;
-        case 'KeyS':
-          symmetricRules();
-          createAtoms(settings.atoms.count);
-          break;
-        case 'KeyE':
-          settings.explore = !settings.explore;
-          break;
-        case 'KeyU':
-          settings.num_colors = Math.min(7, settings.num_colors + 1);
-          setNumberOfColors();
-          startRandom();
-          break;
-        case 'KeyD':
-          settings.num_colors = Math.max(1, settings.num_colors - 1);
-          setNumberOfColors();
-          startRandom();
-          break;
-        case 'Equal':
-        case 'NumpadAdd':
-          settings.time_scale = Math.min(2.0, settings.time_scale * 1.1);
-          break;
-        case 'Minus':
-        case 'NumpadSubtract':
-          settings.time_scale = Math.max(0.1, settings.time_scale / 1.1);
-          break;
-        case 'KeyQ':
-          settings.atoms.count = Math.min(2000, settings.atoms.count + 100);
-          createAtoms(settings.atoms.count);
-          console.log(`Increased particles to ${settings.atoms.count * settings.num_colors} total`);
-          break;
-        case 'KeyA':
-          settings.atoms.count = Math.max(50, settings.atoms.count - 100);
-          createAtoms(settings.atoms.count);
-          console.log(`Decreased particles to ${settings.atoms.count * settings.num_colors} total`);
-          break;
-        case 'KeyC':
-          camera.x = width / 2;
-          camera.y = height / 2;
-          camera.zoom = 1.0;
-          break;
-      }
-    });
-
-    window.addEventListener('keyup', (e) => {
-      keys[e.code] = false;
-    });
-
-    window.addEventListener('resize', () => {
+    let width, height;
+    function resize() {
       width = window.innerWidth;
       height = window.innerHeight;
       canvas.width = width;
       canvas.height = height;
-      initGrid();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // UI Elements
+    const uiContainer = document.getElementById('ui-container');
+    const toggleUiBtn = document.getElementById('toggle-ui');
+    const fpsDisplay = document.getElementById('fpsDisplay');
+    const presetSelect = document.getElementById('presetSelect');
+    const countSlider = document.getElementById('countSlider');
+    const rmaxSlider = document.getElementById('rmaxSlider');
+    const frictionSlider = document.getElementById('frictionSlider');
+    const forceSlider = document.getElementById('forceSlider');
+    const trailSlider = document.getElementById('trailSlider');
+    const matrixDisplay = document.getElementById('matrixDisplay');
+    
+    let isUiVisible = true;
+    toggleUiBtn.addEventListener('click', () => {
+      isUiVisible = !isUiVisible;
+      uiContainer.classList.toggle('hidden', !isUiVisible);
+      toggleUiBtn.textContent = isUiVisible ? 'Hide UI (Tab)' : 'Show UI (Tab)';
+    });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        toggleUiBtn.click();
+      }
     });
 
-    // Initialize and start
-    console.log('Initializing optimized Particle Life...');
-    setNumberOfColors();
-    startRandom();
-    animate();
+    // Simulation Parameters
+    let NUM_COLORS = 6;
+    // Neon colors for a stunning look
+    const COLORS = [
+      '#ff2a2a', // Neon Red
+      '#00ffcc', // Neon Cyan
+      '#ff00ff', // Neon Magenta
+      '#ffff00', // Neon Yellow
+      '#00ff00', // Neon Green
+      '#ff8800'  // Neon Orange
+    ];
+
+    let rMin = 15; // Minimum radius (hard repulsion zone)
+    let rMax = parseInt(rmaxSlider.value);
+    let friction = parseFloat(frictionSlider.value);
+    let forceMultiplier = parseFloat(forceSlider.value);
+    let numParticles = parseInt(countSlider.value);
+    let trailFactor = parseFloat(trailSlider.value);
+
+    // Camera and Controls
+    let camera = { x: 0, y: 0, zoom: 1.0, speed: 15 };
+    let keys = {};
+    window.addEventListener('keydown', (e) => { keys[e.code] = true; });
+    window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+    // Arrays (Data Oriented Design for cache locality)
+    let positionsX, positionsY, velocitiesX, velocitiesY, colorArr;
+    let rules = []; // 2D array [NUM_COLORS][NUM_COLORS]
+    
+    // Spatial Grid 
+    let grid = [];
+    let cellSize = rMax;
+    let gridWidth, gridHeight;
+
+    function initArrays() {
+      camera.x = width / 2;
+      camera.y = height / 2;
+      camera.zoom = 1.0;
+
+      positionsX = new Float32Array(numParticles);
+      positionsY = new Float32Array(numParticles);
+      velocitiesX = new Float32Array(numParticles);
+      velocitiesY = new Float32Array(numParticles);
+      colorArr = new Uint8Array(numParticles);
+
+      for (let i = 0; i < numParticles; i++) {
+        positionsX[i] = Math.random() * width;
+        positionsY[i] = Math.random() * height;
+        colorArr[i] = Math.floor(Math.random() * NUM_COLORS);
+      }
+    }
+
+    function generateRandomRules() {
+      rules = [];
+      for (let i = 0; i < NUM_COLORS; i++) {
+        let row = [];
+        for (let j = 0; j < NUM_COLORS; j++) {
+          row.push((Math.random() * 2 - 1)); // -1 to 1
+        }
+        rules.push(row);
+      }
+      updateMatrixDisplay();
+    }
+
+    function applyPreset(preset) {
+      if (preset === 'random') {
+        generateRandomRules();
+        return;
+      }
+      
+      // Known good presets that generate cell-like structures
+      rules = Array(NUM_COLORS).fill().map(() => Array(NUM_COLORS).fill(0));
+      
+      if (preset === 'cells') {
+        // Cells: Similar colors attract strongly, but repel at close range (handled by force func). 
+        // Different colors repel or have neutral interactions.
+        for(let i=0; i<NUM_COLORS; i++) {
+          for(let j=0; j<NUM_COLORS; j++) {
+            if (i === j) rules[i][j] = 1.0; // Strong self-attraction
+            else rules[i][j] = -0.1; // Slight repulsion from others
+          }
+        }
+        // Predators and preys to make it dynamic
+        rules[0][1] = 0.5; rules[1][0] = -0.5; // Red chases Cyan
+        rules[2][3] = 0.5; rules[3][2] = -0.5; // Magenta chases Yellow
+        rules[4][5] = 0.5; rules[5][4] = -0.5; // Green chases Orange
+      } else if (preset === 'worms') {
+        // Chains / Worms
+        for(let i=0; i<NUM_COLORS; i++) {
+          let next = (i + 1) % NUM_COLORS;
+          rules[i][i] = 0.1; // Gentle self-attraction
+          rules[i][next] = 0.9; // Attract to next color
+          rules[next][i] = -0.5; // Next color repels from this
+        }
+      } else if (preset === 'snakes') {
+         for(let i=0; i<NUM_COLORS; i++) {
+            for(let j=0; j<NUM_COLORS; j++) {
+                if (i===j) rules[i][j] = -0.1; // Slight self-repulsion
+            }
+            let next = (i+1)%NUM_COLORS;
+            rules[i][next] = 1.0;
+            rules[next][i] = -1.0;
+         }
+      } else if (preset === 'chaos') {
+         // Binary extreme values
+         for(let i=0; i<NUM_COLORS; i++) {
+            for(let j=0; j<NUM_COLORS; j++) {
+               rules[i][j] = Math.random() > 0.5 ? 1.0 : -1.0;
+            }
+         }
+      }
+      updateMatrixDisplay();
+    }
+
+    function updateMatrixDisplay() {
+      matrixDisplay.innerHTML = '';
+      matrixDisplay.style.gridTemplateColumns = `repeat(${NUM_COLORS}, 1fr)`;
+      
+      for (let i = 0; i < NUM_COLORS; i++) {
+        let rowDiv = document.createElement('div');
+        rowDiv.className = 'matrix-row';
+        for (let j = 0; j < NUM_COLORS; j++) {
+          let val = rules[i][j];
+          let cell = document.createElement('div');
+          cell.className = 'matrix-cell';
+          // Color based on value: green for positive (attract), red for negative (repel)
+          if (val > 0) {
+            cell.style.backgroundColor = `rgba(0, 255, 204, ${val})`;
+          } else {
+            cell.style.backgroundColor = `rgba(255, 42, 42, ${-val})`;
+          }
+          rowDiv.appendChild(cell);
+        }
+        matrixDisplay.appendChild(rowDiv);
+      }
+    }
+
+    function setupGrid() {
+      cellSize = rMax;
+      gridWidth = Math.ceil(width / cellSize);
+      gridHeight = Math.ceil(height / cellSize);
+      let totalCells = gridWidth * gridHeight;
+      grid = new Array(totalCells);
+      for(let i=0; i<totalCells; i++) grid[i] = [];
+    }
+
+    // Input Listeners
+    countSlider.addEventListener('input', (e) => {
+      document.getElementById('countVal').innerText = e.target.value;
+    });
+    countSlider.addEventListener('change', (e) => {
+      numParticles = parseInt(e.target.value);
+      initArrays();
+    });
+
+    rmaxSlider.addEventListener('input', (e) => {
+      rMax = parseInt(e.target.value);
+      document.getElementById('rmaxVal').innerText = rMax;
+      setupGrid();
+    });
+    
+    frictionSlider.addEventListener('input', (e) => {
+      friction = parseFloat(e.target.value);
+      document.getElementById('frictionVal').innerText = friction.toFixed(2);
+    });
+
+    forceSlider.addEventListener('input', (e) => {
+      forceMultiplier = parseFloat(e.target.value);
+      document.getElementById('forceVal').innerText = forceMultiplier.toFixed(1);
+    });
+    
+    trailSlider.addEventListener('input', (e) => {
+      trailFactor = parseFloat(e.target.value);
+      document.getElementById('trailVal').innerText = trailFactor.toFixed(2);
+    });
+
+    presetSelect.addEventListener('change', (e) => {
+      applyPreset(e.target.value);
+    });
+
+    document.getElementById('btnRandomize').addEventListener('click', () => {
+      presetSelect.value = 'random';
+      generateRandomRules();
+    });
+
+    document.getElementById('btnRestart').addEventListener('click', () => {
+      initArrays();
+    });
+
+    // Physics Engine
+    // The force function determines interaction based on distance (r) and rule value (a)
+    function force(r, a) {
+      if (r < rMin) {
+        // Universal strong repulsion at very close range to prevent collapse
+        return r / rMin - 1;
+      } else if (rMin < r && r < rMax) {
+        // Smooth transition for rule-based force (attract or repel)
+        // Uses a peak in the middle of the range (bump function)
+        return a * (1 - Math.abs(2 * r - rMin - rMax) / (rMax - rMin));
+      } else {
+        return 0;
+      }
+    }
+
+    function updatePhysics() {
+      // Clear grid
+      for (let i = 0; i < grid.length; i++) grid[i].length = 0;
+      
+      // Populate grid for fast neighbor lookup
+      for (let i = 0; i < numParticles; i++) {
+        let cx = Math.floor(positionsX[i] / cellSize);
+        let cy = Math.floor(positionsY[i] / cellSize);
+        
+        // Safety clamps
+        if(cx < 0) cx = 0;
+        if(cx >= gridWidth) cx = gridWidth - 1;
+        if(cy < 0) cy = 0;
+        if(cy >= gridHeight) cy = gridHeight - 1;
+
+        grid[cy * gridWidth + cx].push(i);
+      }
+
+      let rMaxSq = rMax * rMax;
+      
+      for (let i = 0; i < numParticles; i++) {
+        let px = positionsX[i];
+        let py = positionsY[i];
+        let pc = colorArr[i];
+        
+        let fx = 0;
+        let fy = 0;
+
+        let cx = Math.floor(px / cellSize);
+        let cy = Math.floor(py / cellSize);
+
+        // Check neighboring cells (3x3 grid)
+        for (let y = cy - 1; y <= cy + 1; y++) {
+          for (let x = cx - 1; x <= cx + 1; x++) {
+            
+            // Toroidal wrap for neighbor cell lookup
+            let nx = x;
+            let ny = y;
+
+            if (nx < 0) nx = gridWidth - 1;
+            else if (nx >= gridWidth) nx = 0;
+            
+            if (ny < 0) ny = gridHeight - 1;
+            else if (ny >= gridHeight) ny = 0;
+
+            let cellIdx = ny * gridWidth + nx;
+            if(cellIdx < 0 || cellIdx >= grid.length) continue;
+            
+            let cell = grid[cellIdx];
+            for (let j = 0; j < cell.length; j++) {
+              let pIdx = cell[j];
+              if (i === pIdx) continue;
+
+              // Calculate shortest distance on torus
+              let dx = positionsX[pIdx] - px;
+              let dy = positionsY[pIdx] - py;
+              
+              if (dx > width * 0.5) dx -= width;
+              else if (dx < -width * 0.5) dx += width;
+
+              if (dy > height * 0.5) dy -= height;
+              else if (dy < -height * 0.5) dy += height;
+              
+              let distSq = dx * dx + dy * dy;
+              
+              if (distSq > 0 && distSq < rMaxSq) {
+                let dist = Math.sqrt(distSq);
+                let ruleVal = rules[pc][colorArr[pIdx]];
+                let f = force(dist, ruleVal);
+                
+                // Accumulate force vector
+                fx += (dx / dist) * f;
+                fy += (dy / dist) * f;
+              }
+            }
+          }
+        }
+
+        // Apply force with multiplier parameter
+        fx *= rMax * forceMultiplier;
+        fy *= rMax * forceMultiplier;
+
+        velocitiesX[i] += fx;
+        velocitiesY[i] += fy;
+        
+        // Apply friction
+        velocitiesX[i] *= (1 - friction);
+        velocitiesY[i] *= (1 - friction);
+      }
+
+      // Apply velocities & keep in bounds (Toroidal)
+      for (let i = 0; i < numParticles; i++) {
+        // dt factor scaling down velocity per frame
+        positionsX[i] += velocitiesX[i] * 0.05; 
+        positionsY[i] += velocitiesY[i] * 0.05;
+
+        if (positionsX[i] < 0) positionsX[i] += width;
+        if (positionsX[i] >= width) positionsX[i] -= width;
+        if (positionsY[i] < 0) positionsY[i] += height;
+        if (positionsY[i] >= height) positionsY[i] -= height;
+      }
+    }
+
+    // Render loop
+    let lastTime = performance.now();
+    let frames = 0;
+
+    function handleCamera() {
+      let speed = camera.speed / camera.zoom;
+      if (keys['ArrowLeft']) camera.x -= speed;
+      if (keys['ArrowRight']) camera.x += speed;
+      if (keys['ArrowUp']) camera.y -= speed;
+      if (keys['ArrowDown']) camera.y += speed;
+      if (keys['KeyZ']) camera.zoom = Math.min(camera.zoom + 0.05, 5.0);
+      if (keys['KeyX']) camera.zoom = Math.max(camera.zoom - 0.05, 0.1);
+      if (keys['KeyC']) { camera.x = width / 2; camera.y = height / 2; camera.zoom = 1.0; }
+    }
+
+    function render() {
+      handleCamera();
+
+      // Motion blur / Trails effect (apply over the whole screen)
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform for background
+      if (trailFactor > 0) {
+        ctx.fillStyle = `rgba(5, 5, 5, ${1 - trailFactor})`;
+        ctx.fillRect(0, 0, width, height);
+      } else {
+        ctx.fillStyle = '#050505';
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      // Apply camera transform
+      ctx.translate(width / 2, height / 2);
+      ctx.scale(camera.zoom, camera.zoom);
+      ctx.translate(-camera.x, -camera.y);
+
+      // Draw primary particles (Batch by color for max performance)
+      for(let c = 0; c < NUM_COLORS; c++) {
+        ctx.fillStyle = COLORS[c];
+        
+        ctx.beginPath();
+        for (let i = 0; i < numParticles; i++) {
+          if(colorArr[i] === c) {
+             let px = positionsX[i];
+             let py = positionsY[i];
+             // Render primary particle
+             ctx.rect(px - 1.5, py - 1.5, 3, 3);
+          }
+        }
+        ctx.fill();
+      }
+
+      // Draw 8 toroidal neighbors (clones) in grey/plomo to distinguish them
+      ctx.fillStyle = '#444455'; // Plomo
+      ctx.beginPath();
+      for (let i = 0; i < numParticles; i++) {
+         let px = positionsX[i];
+         let py = positionsY[i];
+         
+         for (let dx = -1; dx <= 1; dx++) {
+           for (let dy = -1; dy <= 1; dy++) {
+             if (dx === 0 && dy === 0) continue;
+             ctx.rect(px + dx * width - 1.5, py + dy * height - 1.5, 3, 3);
+           }
+         }
+      }
+      ctx.fill();
+
+      updatePhysics();
+
+      // FPS Calc
+      frames++;
+      let now = performance.now();
+      if (now - lastTime >= 1000) {
+        fpsDisplay.innerText = `${frames} FPS`;
+        frames = 0;
+        lastTime = now;
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    // Init Simulation
+    initArrays();
+    applyPreset('random'); // Start with something impressive
+    setupGrid();
+    render();
+
   </script>
 </body>
 </html>
